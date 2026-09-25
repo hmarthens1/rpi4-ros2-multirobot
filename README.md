@@ -18,6 +18,10 @@ Lab_01/code/
 Lab_02/index.md          ROS 2 Humble ros-base, fleet domain ID, cross-robot test, namespaces
 Lab_02/code/
   install_ros2.sh          the Lab 02 install steps in one script              (runs on the Pi)
+Lab_03/index.md          Hiwonder expansion board SDK on Ubuntu 22.04
+Lab_03/code/
+  install_hiwonder_sdk.sh  deps + clone of the mse112-ws-student workspace    (runs on the Pi)
+  board_test.py            battery, RGB, buzzer, optional --motors            (runs on the Pi)
 ```
 
 ## Publishing
