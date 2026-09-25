@@ -83,11 +83,13 @@ say "This Pi has $((RAM_KB/1024)) MB RAM and $(nproc) cores"
 if [ "$SWAP_MODE" = "both" ] || [ "$SWAP_MODE" = "zram" ]; then
   say "Setting up zram (compressed swap in RAM)"
 
-  # On Ubuntu's Raspberry Pi kernel the zram module may live in the
-  # linux-modules-extra package, which is not always installed.
-  if ! modprobe zram 2>/dev/null; then
-    warn "zram module not found - installing linux-modules-extra-$(uname -r)"
-    apt-get install -y "linux-modules-extra-$(uname -r)" >/dev/null 2>&1
+  # On Ubuntu's Raspberry Pi kernel the zram module lives in the
+  # linux-modules-extra package, which is not installed by default.
+  # linux-modules-extra-raspi follows kernel upgrades, so zram still
+  # loads after the next kernel update; the -$(uname -r) one is for now.
+  if ! dpkg -s linux-modules-extra-raspi >/dev/null 2>&1 || ! modprobe zram 2>/dev/null; then
+    warn "installing linux-modules-extra (zram lives there on Ubuntu's Pi kernel)"
+    apt-get install -y linux-modules-extra-raspi "linux-modules-extra-$(uname -r)" >/dev/null 2>&1
   fi
 
   if modprobe zram 2>/dev/null; then
