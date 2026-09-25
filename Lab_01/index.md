@@ -7,30 +7,38 @@ title: "Lab 01 — Raspberry Pi 4 Setup & SSH"
 
 **Raspberry Pi 4 · Hiwonder 4-channel motor expansion board · Ubuntu Server 22.04 LTS · ×3 robots**
 
-**Objectives:** Flash Ubuntu Server 22.04 LTS (64-bit) to an SD card and boot the Pi 4 without a monitor. Then connect over SSH, set up networking (a static Ethernet IP for the bench and Wi-Fi for the fleet), update the system, add swap and prepare the Pi for **ROS 2 Humble (ros-base)**. Finish by running `robot_check.sh`, which writes a report of what the robot's Pi can do. Do this once per robot.
+**Objectives:** Flash Ubuntu Server 22.04 LTS (64-bit) to an SD card and boot the Pi 4 without a monitor. The Pi joins your Wi-Fi router on its own, so you connect over SSH through the router, then give the Pi a **static Wi-Fi address**, update the system, add swap and prepare it for **ROS 2 Humble (ros-base)**. Finish by running `robot_check.sh`, which writes a report of what the robot's Pi can do. Do this once per robot.
 
 ---
 
 ## Before You Start
 
 You will need, **per robot**:
-- A **Raspberry Pi 4 Model B** (2, 4 or 8 GB)
+- A **Raspberry Pi 4 Model B** (2, 4 or 8 GB). It has Wi-Fi built in
 - A micro-SD card (32 GB or more, class **A1/A2**) and a card reader
 - For the bench: the official **5 V 3 A USB-C** Pi 4 power supply
 - On the robot: the **Hiwonder RaspberryPi-Adapter-4chMotorDrive V3.x** expansion board and its battery
-- An Ethernet cable
 
-And once: a laptop (Windows, macOS or Linux). Optional: a micro-HDMI to HDMI cable, a monitor and a USB keyboard, for setting the hostname at the console (Part 2.1) or for troubleshooting.
+And once:
+- A **Wi-Fi router with internet access**. The robots and your laptop all join it
+- A laptop (Windows, macOS or Linux) on that router's Wi-Fi
+- Access to the router's admin page (usually `http://192.168.0.1` or `http://192.168.1.1`)
+- Optional: a micro-HDMI to HDMI cable, a monitor and a USB keyboard, for setting the hostname at the console (Part 2.1) or when the Pi doesn't show up on the network
 
 ### Plan the fleet first
 
-Every robot needs its own name and its own address. Decide them now and label the SD cards:
+Every robot needs its own name and its own **fixed** Wi-Fi address, so you always SSH to the
+same place and the robots can find each other. Decide them now and label the SD cards.
+The examples use a router at `192.168.0.1`:
 
-| Robot | Hostname | eth0 static IP (bench cable) | Wi-Fi |
+| Robot | Hostname | wlan0 static IP | Gateway (router) |
 |---|---|---|---|
-| 1 | `robot01` | `<laptop-range>.11` | DHCP from the robots' router |
-| 2 | `robot02` | `<laptop-range>.12` | DHCP from the robots' router |
-| 3 | `robot03` | `<laptop-range>.13` | DHCP from the robots' router |
+| 1 | `robot01` | `192.168.0.11` | `192.168.0.1` |
+| 2 | `robot02` | `192.168.0.12` | `192.168.0.1` |
+| 3 | `robot03` | `192.168.0.13` | `192.168.0.1` |
+
+The rule: same first three numbers as the router, last number **10 + the robot number**.
+Part 4.1 checks that these addresses are free on your router.
 
 > **Why `robot01` and not `rpi4-01`?** Later, each robot's ROS 2 topics live under its own
 > namespace, e.g. `/robot01/cmd_vel`. ROS names can't contain `-`, and hostnames can't
@@ -89,13 +97,17 @@ choose **Edit settings**. Newer Imager versions show these as steps in the wizar
 |---|---|---|
 | General | Hostname | `robot01` (then `robot02`, `robot03`; missed it? see Part 2.1) |
 | General | Username / password | `ubuntu` / a password you will remember. **Use the same user on all three robots**: scripts and ROS 2 tools assume it |
-| General | Wireless LAN | the robots' Wi-Fi SSID + password + **Wireless LAN country** (e.g. `CA`) |
+| General | Wireless LAN | **your router's** Wi-Fi SSID + password + **Wireless LAN country** (e.g. `CA`). Required: it is the Pi's only network connection |
 | General | Locale | your time zone and keyboard layout |
-| Services | Enable SSH | ✅ *Use password authentication* (skipped? see Part 3.3.1) |
+| Services | Enable SSH | ✅ *Use password authentication* (skipped? see Part 3.2.1) |
 
 Click **Save**, then **Yes** to apply the settings, then **Write**. The write and verify take about 5–10 minutes.
 
-> **Which Wi-Fi?** The three robots and your laptop must be on **the same network** and able
+> **Check the Wi-Fi name and password twice.** A typo means the Pi never joins the router,
+> and without a cable the only way to fix it is a monitor and keyboard, or re-flashing.
+> The SSID is case-sensitive.
+
+> **Which router?** The three robots and your laptop must be on **the same network** and able
 > to reach each other, because ROS 2 finds other robots by multicast. Campus and guest
 > Wi-Fi usually blocks that. A small dedicated router for the robots avoids the problem
 > (Part 4.3).
@@ -105,13 +117,12 @@ Click **Save**, then **Yes** to apply the settings, then **Write**. The write an
 ## Part 2 — First Boot
 
 1. Insert the SD card into the Pi.
-2. Plug an Ethernet cable between the Pi and your laptop, or your router.
-3. Connect the **USB-C** supply (bench, expansion board off). The red LED lights and the green LED flickers while the SD card is read.
+2. Connect the **USB-C** supply (bench, expansion board off). The red LED lights and the green LED flickers while the SD card is read.
 
 **Wait 3–5 minutes.** On first boot Ubuntu's `cloud-init` applies your Imager settings:
-it creates your user, sets the hostname, joins Wi-Fi and enables SSH. It may reboot once
-while it does this. If you try to log in too early, you get `Permission denied` even with
-the right password. Wait, then try again.
+it creates your user, sets the hostname, joins your Wi-Fi router and enables SSH. It may
+reboot once while it does this. If you try to log in too early, you get `Permission denied`
+or no answer at all, even with the right settings. Wait, then try again.
 
 > **What about a monitor?** You don't need one. If you want to watch the boot, plug a
 > monitor into **micro-HDMI 0**, the port next to the USB-C socket, and a USB keyboard into any USB port.
@@ -180,10 +191,10 @@ sudo reboot
 hostname          # -> robot01
 ```
 
-While you are at the console, note the Pi's IP address. It saves searching for it in Part 3.2:
+While you are at the console, note the Pi's IP address. It saves searching for it in Part 3.1:
 
 ```bash
-ip -br addr       # e.g. eth0  UP  192.168.137.57/24
+ip -br addr       # e.g. wlan0  UP  192.168.0.3/24
 ```
 
 > **Later changes over SSH:** the same steps (3–7) work in an SSH session too. If you
@@ -194,173 +205,58 @@ ip -br addr       # e.g. eth0  UP  192.168.137.57/24
 
 ## Part 3 — Connect from your laptop
 
-### 3.1 Share internet from your laptop to the Pi (over Ethernet)
+Your laptop and the Pi are both on the router's Wi-Fi, so the laptop reaches the Pi
+through the router. No cable and no internet sharing are needed.
 
-This lets the Pi reach the internet through your laptop's Wi-Fi. It also gives you a
-direct cable link that works on any network, including campus Wi-Fi that blocks
-device-to-device traffic.
+### 3.1 Find the Pi's IP address
 
-For the **first connection**, use the built-in GUI sharing. It also runs a DHCP server,
-so the Pi gets an address automatically:
+On first boot the router gives the Pi an address automatically (DHCP), e.g. `192.168.0.3`.
+Part 4.1 replaces it with the fixed one from your plan. To find it:
 
-| Your laptop | How | Pi gets an address in |
+| Way | How | Look for |
 |---|---|---|
-| **Windows** | Control Panel → Network Connections → right-click *Wi-Fi* → Properties → Sharing → allow sharing with *Ethernet* | `192.168.137.x` |
-| **macOS** | System Settings → General → Sharing → Internet Sharing: share *Wi-Fi* to *Ethernet/USB LAN* | `192.168.2.x` |
-| **Linux (NetworkManager)** | Wired connection settings → IPv4 → **Shared to other computers** | `10.42.0.x` |
-
-**Windows:**
-
-<a href="https://youtu.be/Tc5ONryOa1A?si=qv7NKpMUDXcuS7nK" target="_blank">
-  <img src="https://img.youtube.com/vi/Tc5ONryOa1A/hqdefault.jpg" alt="Internet sharing Windows" style="max-width:100%;">
-</a>
-
-**macOS:**
-
-<a href="https://www.youtube.com/watch?v=tY1-dS3cICc" target="_blank">
-  <img src="https://img.youtube.com/vi/tY1-dS3cICc/hqdefault.jpg" alt="Internet sharing macOS" style="max-width:100%;">
-</a>
-
-#### Script alternative (optional)
-
-These scripts do the same thing from a terminal. Each one has a **SETTINGS block at the
-top**: edit the adapter names and IP addresses to match your laptop before running it.
-
-| Your laptop | Script | Run it with |
-|---|---|---|
-| Windows | ⬇️ [share_internet_windows.ps1](code/share_internet_windows.ps1) | PowerShell **as Administrator** |
-| macOS | ⬇️ [share_internet_macos.sh](code/share_internet_macos.sh) | Terminal |
-| Linux | ⬇️ [share_internet_linux.sh](code/share_internet_linux.sh) | Terminal |
-
-```bash
-# macOS / Linux: list adapters first, then turn sharing on (--undo turns it off)
-bash share_internet_linux.sh --list
-sudo bash share_internet_linux.sh
-```
-
-```powershell
-# Windows - PowerShell as Administrator (-List, -Undo)
-powershell -ExecutionPolicy Bypass -File share_internet_windows.ps1 -List
-powershell -ExecutionPolicy Bypass -File share_internet_windows.ps1
-```
-
-> **The macOS and Linux scripts do NOT hand out addresses** (no DHCP). The Pi then has no
-> IPv4 address until you give it the matching static IP (Part 4.1). You can still reach it
-> over **IPv6 link-local** (Part 3.2.2) to do that, or set it at the Pi's console (Part 4.1, Method A).
-> On Windows, ICS always uses `192.168.137.1` for the laptop, so the script and the GUI behave the same.
-
-> **Sharing is cleared when your laptop reboots.** Turn it on again each session.
-
-### 3.2 Find the Pi's IP address
-
-Ubuntu Server doesn't advertise `robot01.local` until you install `avahi-daemon`
-(Part 4.2), so for the first login you need an address. Which method works depends on
-whether your laptop **hands out** addresses on the cable (DHCP):
-
-| Laptop sharing | Does the Pi get an IPv4 address? | Use |
-|---|---|---|
-| Windows ICS, macOS Internet Sharing, Linux "Shared to other computers" (GUI) | Yes, automatically | **3.2.1**, IPv4 |
-| `share_internet_*.sh` scripts, or a laptop port set to a manual IP | **No.** The Pi sits waiting for an address that never comes | **3.2.2**, IPv6 link-local |
-| Pi joined Wi-Fi (set in Imager) | Yes, from the router | router's "connected devices" page, looking for `robot01` |
+| **Router admin page** (easiest) | open `http://192.168.0.1` (your router's address) → *Connected devices*, *DHCP clients* or *Attached devices* | `robot01`, or a Pi MAC address |
+| **Linux laptop** | `nmap -sn 192.168.0.0/24` (`sudo apt install nmap`), then `ip neigh` | a line with a Pi MAC |
+| **macOS laptop** | `nmap -sn 192.168.0.0/24` (from Homebrew), then `arp -a` | a line with a Pi MAC |
+| **Windows laptop** | PowerShell: `arp -a` | under your Wi-Fi interface, a `192.168.0.x` entry with a Pi MAC |
+| **At the Pi** | monitor + keyboard, log in, `ip -br addr` | `wlan0  UP  192.168.0.3/24` |
 
 **How to recognise the Pi:** its hardware (MAC) address starts with a Raspberry Pi prefix:
 `dc:a6:32`, `e4:5f:01`, `d8:3a:dd`, `88:a2:9e`, `28:cd:c1`, `2c:cf:67` or `b8:27:eb`.
 Windows shows these with dashes, e.g. `dc-a6-32-…`.
 
-#### 3.2.1 IPv4: when the laptop hands out addresses
+Use your router's first three numbers wherever these examples say `192.168.0`.
 
-| Laptop | Command | Look for |
-|---|---|---|
-| **Windows** (ICS) | PowerShell: `arp -a` | under `Interface: 192.168.137.1`, a `192.168.137.x` entry with a Pi MAC |
-| **macOS** | Terminal: `arp -a \| grep 192.168.2` | a `192.168.2.x` entry with a Pi MAC |
-| **Linux** (Shared) | `ip neigh show dev <ethernet-if>` | a `10.42.0.x` entry with a Pi MAC |
-| any | `nmap -sn 192.168.137.0/24` (use your range) | a host with a Pi MAC |
+> **Your laptop's own address** tells you the network: `ip -br addr` (Linux), `ipconfig`
+> (Windows) or `ipconfig getifaddr en0` (macOS). If the laptop is `192.168.0.2`, the Pi is
+> somewhere in `192.168.0.x`.
 
-#### 3.2.2 IPv6 link-local: works even when the Pi has no IPv4 at all
+> **The Pi doesn't show up at all?** Give it 5 minutes after power-on. Then check the Wi-Fi
+> name, password and country from Imager, and that the router uses 2.4 GHz or 5 GHz on a
+> channel the Pi supports. A monitor and keyboard show the real state: log in and run
+> `ip -br addr` and `networkctl status wlan0`.
 
-Every Ethernet port gives itself an **IPv6 link-local address** (it starts with `fe80::`) as
-soon as a cable is plugged in. It doesn't need DHCP, a router or any setup. Ubuntu builds
-it from the MAC address, so it **never changes**. That makes it a reliable way into a
-Pi that has no IPv4 address, or the wrong one.
-
-The trick is to ping **`ff02::1`**, the IPv6 "everyone on this cable" address, and see who replies.
-
-**1. Find the name of your laptop's Ethernet interface.** A link-local address only means
-something together with the interface it lives on.
-
-| Laptop | Command | Typical name |
-|---|---|---|
-| **Linux** | `ip -br link` | `enp130s0`, `eth0`, `enx…` (USB adapter) |
-| **macOS** | `networksetup -listallhardwareports` | `en5`, `en6`, `en7` (USB-C Ethernet adapter) |
-| **Windows** | PowerShell: `Get-NetAdapter` | use the **ifIndex** number of *Ethernet*, e.g. `12` |
-
-**2. Ping everyone on the cable, then list who answered.** Replace `enp130s0`, `en5` or `12` with yours:
-
-**Linux:**
+### 3.2 SSH in
 
 ```bash
-ping -6 -c3 ff02::1%enp130s0
-ip -6 neigh show dev enp130s0
-```
-
-**macOS:**
-
-```bash
-ping6 -c3 ff02::1%en5
-ndp -an | grep en5
-```
-
-**Windows (PowerShell):**
-
-```powershell
-ping -6 -n 3 ff02::1%12
-Get-NetNeighbor -InterfaceIndex 12 -AddressFamily IPv6 | Where-Object LinkLayerAddress -ne "" | Format-Table IPAddress, LinkLayerAddress, State
-```
-
-**3. Pick out the Pi.** One of the replies is the laptop itself. The Pi's line shows a Pi MAC (the state at the end may say `REACHABLE`, `STALE` or `DELAY`; any of them is fine). Example from a Linux laptop:
-
-```
-$ ping -6 -c3 ff02::1%enp130s0
-64 bytes from fe80::6914:41ea:6e9:c4a0%enp130s0: icmp_seq=1 ttl=64 time=0.046 ms   <- the laptop
-64 bytes from fe80::dea6:32ff:fe45:dcb7%enp130s0: icmp_seq=1 ttl=64 time=0.540 ms  <- the Pi
-$ ip -6 neigh show dev enp130s0
-fe80::dea6:32ff:fe45:dcb7 lladdr dc:a6:32:45:dc:b7 REACHABLE                       <- Pi MAC
-```
-
-**4. Use it: always add `%<interface>` at the end.**
-
-```bash
-ssh ubuntu@fe80::dea6:32ff:fe45:dcb7%enp130s0                  # Windows: ...%12
-scp setup_network.sh 'ubuntu@[fe80::dea6:32ff:fe45:dcb7%enp130s0]:~/lab01/'   # scp needs [ ] and quotes
-```
-
-Now use Part 4.1 to give the Pi a proper IPv4 address in your laptop's range.
-
-> **Is SSH even running?** Check the port before you worry about passwords:
-> `nc -zv fe80::dea6:32ff:fe45:dcb7%enp130s0 22` (Linux/macOS) should report *succeeded* / *open*.
-> On Windows: `Test-NetConnection fe80::dea6:32ff:fe45:dcb7%12 -Port 22`.
-
-> **Nothing but the laptop answers?** Check the cable and the Pi's Ethernet LEDs, and
-> give the Pi a few minutes after power-on. On Windows, the neighbour list sometimes stays
-> empty even when the Pi is there. In that case, use the monitor and run `ip -br addr` on the Pi (Part 2.1).
-
-### 3.3 SSH in
-
-```bash
-ssh ubuntu@<PI_IP>          # e.g. ssh ubuntu@192.168.137.57, or the fe80::…%<if> address
+ssh ubuntu@<PI_IP>          # e.g. ssh ubuntu@192.168.0.3
 ```
 
 Use the username you set in Imager. Type `yes` to accept the host key the first time, then your password.
 
-> **"REMOTE HOST IDENTIFICATION HAS CHANGED"** after re-flashing is expected: the new OS
-> has new keys. Clear the old one with `ssh-keygen -R <PI_IP>` (and `ssh-keygen -R robot01.local`).
-> You will see this often with three robots moving between addresses.
+> **No answer, or `ping` works only on the second try?** The Pi's Wi-Fi saves power by
+> dozing, so the first packets can be lost or take a second. Try again. Part 4.4 turns power
+> saving off.
 
-#### 3.3.1 `Permission denied (publickey)`: turn on password login
+> **"REMOTE HOST IDENTIFICATION HAS CHANGED"** after re-flashing, or after the Pi moves to its
+> static address, is expected: the new OS has new keys. Clear the old one with
+> `ssh-keygen -R <PI_IP>` (and `ssh-keygen -R robot01.local`).
+
+#### 3.2.1 `Permission denied (publickey)`: turn on password login
 
 ```
-$ ssh ubuntu@fe80::dea6:32ff:fe45:dcb7%enp130s0
-ubuntu@fe80::dea6:32ff:fe45:dcb7%enp130s0: Permission denied (publickey).
+$ ssh ubuntu@192.168.0.3
+ubuntu@192.168.0.3: Permission denied (publickey).
 ```
 
 This means the Pi **accepts only SSH keys, not passwords**, and it doesn't trust your laptop's key.
@@ -395,13 +291,13 @@ sudo sshd -T | grep -i passwordauthentication     # -> passwordauthentication ye
 ssh <username>@<PI_IP>
 ```
 
-Next, set up SSH keys (Part 3.4). After that you can switch password login off again for
+Next, set up SSH keys (Part 3.3). After that you can switch password login off again for
 security with `sudo rm /etc/ssh/sshd_config.d/01-password-auth.conf && sudo systemctl restart ssh`.
 
 > **Wrong username gives the same error.** If the account doesn't exist, SSH still says
 > `Permission denied (publickey)` when passwords are off. Check it with `whoami` at the console.
 
-### 3.4 Log in without a password (SSH keys)
+### 3.3 Log in without a password (SSH keys)
 
 From your **laptop** (not the Pi). Create the key once, then copy it to each robot:
 
@@ -416,41 +312,21 @@ On Windows, where `ssh-copy-id` doesn't exist, run this in PowerShell:
 type $env:USERPROFILE\.ssh\id_ed25519.pub | ssh ubuntu@<PI_IP> "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys"
 ```
 
-**Shortcut names for the fleet.** Add this to `~/.ssh/config` on the laptop (create the file
-if needed). Then `ssh robot01` works, and so do `scp` and VS Code:
+The key stays valid when the Pi moves to its static address in Part 4.1.
 
-```
-Host robot01 robot02 robot03
-    HostName %h.local
-    User ubuntu
-```
-
-`%h.local` needs `avahi-daemon` on the robots (Part 4.2).
-
-### 3.5 VS Code Remote-SSH
+### 3.4 VS Code Remote-SSH
 
 For a graphical editor on files that live on the Pi, install the **Remote - SSH**
-extension in VS Code and connect to `ubuntu@<PI_IP>` (or `robot01` with the config above):
+extension in VS Code and connect to `ubuntu@<PI_IP>` (or `robot01` once Part 4.2 is done):
 
 <a href="https://youtu.be/RLd6qgRHVh0" target="_blank">
   <img src="https://img.youtube.com/vi/RLd6qgRHVh0/hqdefault.jpg" alt="SSH with VSCode" style="max-width:100%;">
 </a>
 
-### 3.6 Get the lab scripts onto the Pi
+### 3.5 Get the lab scripts onto the Pi
 
-Several later steps run a script **on the Pi**. The scripts are published on this site, so
-they start out on the internet and not on the Pi. Use whichever of these three ways fits
-your situation:
-
-| Way | Needs | Best when |
-|---|---|---|
-| **A. Download on the Pi** (`curl`) | Pi has internet | You can SSH in and `ping 8.8.8.8` works on the Pi |
-| **B. Copy from your laptop** (`scp`) | SSH from laptop to Pi | You can SSH in, but the Pi has no internet |
-| **C. Copy via the SD card** | Nothing: no network at all | You can't SSH in yet (e.g. the Pi isn't in your laptop's range) |
-
-#### A. Download directly on the Pi
-
-In an SSH session or at the Pi's console:
+Several later steps run a script **on the Pi**. The Pi has internet through the router, so
+download them directly. In an SSH session:
 
 ```bash
 mkdir -p ~/lab01 && cd ~/lab01
@@ -460,112 +336,96 @@ done
 ls
 ```
 
-#### B. Copy from your laptop with `scp`
+The scripts: ⬇️ [setup_network.sh](code/setup_network.sh) ·
+⬇️ [setup_swap.sh](code/setup_swap.sh) · ⬇️ [robot_check.sh](code/robot_check.sh)
 
-1. On your **laptop**, click the ⬇️ links on this page to download the scripts. They land in
-   your `Downloads` folder: [setup_network.sh](code/setup_network.sh),
-   [setup_swap.sh](code/setup_swap.sh), [robot_check.sh](code/robot_check.sh).
-   If the browser opens the file as text instead, right-click the link → **Save link as…**
-2. Open a terminal on the **laptop**. On Windows use PowerShell. Go to the Downloads folder:
-
-   ```bash
-   cd ~/Downloads             # Windows PowerShell: cd $HOME\Downloads
-   ```
-
-3. Create the folder on the Pi, then copy the files into it. Replace `<PI_IP>` with its address:
-
-   ```bash
-   ssh ubuntu@<PI_IP> "mkdir -p ~/lab01"
-   scp setup_network.sh setup_swap.sh robot_check.sh ubuntu@<PI_IP>:~/lab01/
-   ```
-
-4. Check on the Pi: `ls ~/lab01`
-
-#### C. Copy through the SD card (no network needed)
-
-The SD card's first partition, **`system-boot`**, is a normal FAT drive that Windows, macOS and
-Linux can all read and write. Anything you copy there shows up on the Pi under `/boot/firmware/`.
-
-1. On the Pi run `sudo poweroff`, wait until the green LED stops, unplug the power, and take out the SD card.
-2. Put the SD card in your laptop. A drive called **`system-boot`** appears.
-   > **Windows may also say *"You need to format the disk in drive X: before you can use it"*.**
-   > That is the Linux partition, which Windows can't read. Click **Cancel**. Formatting
-   > it would erase Ubuntu.
-3. Drag the downloaded scripts onto the `system-boot` drive, then **eject** it properly before removing the card.
-4. Put the card back in the Pi and power on. At the Pi console, or over SSH:
-
-   ```bash
-   mkdir -p ~/lab01
-   cp /boot/firmware/*.sh ~/lab01/
-   ls ~/lab01
-   ```
+> **`curl: (6) Could not resolve host`** means the Pi has no internet yet. Check
+> `ping -c3 8.8.8.8` on the Pi. As a fallback, download the scripts on the laptop and copy them over:
+> `scp setup_network.sh setup_swap.sh robot_check.sh ubuntu@<PI_IP>:~/lab01/`
 
 ---
 
 ## Part 4 — Networking
 
 Ubuntu Server doesn't use `/etc/dhcpcd.conf` (a Raspberry Pi OS file). Networking is set by
-**netplan** YAML files in `/etc/netplan/`.
+**netplan** YAML files in `/etc/netplan/`. On first boot, cloud-init wrote
+`/etc/netplan/50-cloud-init.yaml` with the Wi-Fi network you gave Imager, set to get an address by DHCP.
 
-The robots use two links:
-- **eth0**, a cable to your laptop on the bench, with a fixed address (4.1), for setup and rescue
-- **wlan0**, Wi-Fi to the robots' router (4.3), which is how the three robots and the laptop talk ROS 2 to each other
+### 4.1 Static IP on wlan0
 
-### 4.1 Static IP on eth0, in your laptop's shared range
+The router's DHCP address can change after a reboot, and then you are hunting for the Pi
+again, and the other robots lose it too. A static address never changes.
 
-When your laptop shares its internet over Ethernet, the cable becomes a small network with
-the **laptop as the gateway**. The Pi must have an address on that same network, meaning the
-same first three numbers, and must use the laptop's address as its gateway. A fixed
-(static) address also means you always SSH to the same IP.
+#### Step 1 — Get your router's details
 
-#### Step 1 — Find your laptop's address on the Ethernet link
+You need three things. Find them on the Pi, in the SSH session:
 
-Turn internet sharing on (Part 3.1) with the cable plugged in, then on the **laptop**:
+```bash
+ip -br addr show wlan0     # the current address and prefix, e.g. 192.168.0.3/24
+ip route | grep default    # the router (gateway), e.g. "default via 192.168.0.1 dev wlan0"
+```
 
-| Laptop | Command | Look for |
+| You need | Example | Where it comes from |
 |---|---|---|
-| **Windows** | `ipconfig` (PowerShell) | the *Ethernet adapter* section → **IPv4 Address**, e.g. `192.168.137.1` |
-| **macOS** | `ifconfig bridge100 \| grep "inet "` (GUI sharing) or `ifconfig en5 \| grep "inet "` (script) | `inet 192.168.2.1` |
-| **Linux** | `ip -br addr` | your Ethernet interface (`enp…`/`eth…`), e.g. `10.42.0.1/24` |
+| **Gateway** | `192.168.0.1` | the `default via` address |
+| **Prefix** | `/24` | the end of the current address |
+| **Static address** | `192.168.0.11/24` | first three numbers of the gateway + `.1N` for robot `0N` |
 
-**The rule:** keep the first three numbers, and make the last one **10 + the robot number**:
-`robot01` → `.11`, `robot02` → `.12`, `robot03` → `.13`.
+#### Step 2 — Make sure the address is free
 
-| If the laptop is… | then `robot01` gets `ETH_ADDRESS` | and `ETH_GATEWAY` |
+The static address must not be one the router could hand to another device. Open the
+router's admin page (`http://192.168.0.1`), find the **DHCP settings** and check the
+**address pool** (or "range"):
+
+| If the pool is… | Then |
+|---|---|
+| e.g. `192.168.0.100` – `192.168.0.199` | `.11`, `.12`, `.13` are outside it. Use them |
+| e.g. `192.168.0.2` – `192.168.0.254` (the whole network) | change the pool's start to `.100`, **or** pick addresses above the pool's end if there is room |
+
+Then check nobody is using it right now. On the Pi:
+
+```bash
+ping -c2 192.168.0.11      # "Destination Host Unreachable" or 100% loss = free
+```
+
+> **Alternative: a DHCP reservation.** Most routers can always give the same address to one
+> MAC address (*Address reservation*, *Static lease*). That gives a fixed address without
+> changing the Pi at all. This lab sets it on the Pi instead, so the address stays the same
+> if the robots move to another router.
+
+#### Step 3 — Set it on the Pi: pick Method A or B
+
+Both methods change the address of the connection you are using, so **the SSH session
+freezes when you apply it**. That is expected. Wait about 20 seconds and connect to the new
+address. If you make a mistake, the Pi drops off the network until you fix it with a
+monitor and keyboard, so check your values before applying.
+
+| | Method A — write the file by hand | Method B — the `setup_network.sh` script |
 |---|---|---|
-| `192.168.137.1` (Windows ICS) | `192.168.137.11/24` | `192.168.137.1` |
-| `192.168.2.1` (macOS Internet Sharing) | `192.168.2.11/24` | `192.168.2.1` |
-| `10.42.0.1` (Linux "Shared to other computers") | `10.42.0.11/24` | `10.42.0.1` |
-| `192.168.0.1` (macOS / Linux script) | `192.168.0.11/24` | `192.168.0.1` |
-| anything else, e.g. `a.b.c.1` | `a.b.c.11/24` | `a.b.c.1` |
-
-Write your values down. The examples below use the Windows row and `robot01`.
-
-#### Step 2 — Set it on the Pi: pick Method A or B
-
-| | Method A — at the Pi console | Method B — the script over SSH |
-|---|---|---|
-| Needs | monitor + USB keyboard (Part 2.1) | an SSH session to the Pi already working |
-| Use it when | you **can't** reach the Pi over the network yet | you **can** already SSH in: over Wi-Fi, via a GUI-sharing address, or over IPv6 link-local (Part 3.2.2) |
+| What | one small netplan file that overrides the address | one netplan file with everything, a backup and checks |
+| Checks the address is free | no, you did it in Step 2 | yes |
+| Undo | delete the file | `--restore` |
 
 ---
 
-#### Method A — Write the netplan file by hand (monitor + keyboard)
+#### Method A — Write the netplan file by hand
 
-This needs no network and no script: you type the config directly on the Pi.
-
-**1.** Log in at the console (see Part 2.1) and look at the existing network files:
+**1.** Look at the existing network files:
 
 ```bash
 ls /etc/netplan/
 # usually: 50-cloud-init.yaml   (written on first boot from your Imager settings)
+sudo cat /etc/netplan/50-cloud-init.yaml
 ```
 
-**2.** Create a new file. Its name starts with `99-` so it is read *last* and overrides the
-eth0 settings in `50-cloud-init.yaml`. Your Wi-Fi settings in that file are left alone.
+You see `wifis:` → `wlan0:` with your network name under `access-points:` and `dhcp4: true`.
+
+**2.** Create a new file. Its name starts with `99-` so it is read *last*. netplan merges the
+files: your new file replaces only the address settings of `wlan0`, and the Wi-Fi name and
+password still come from `50-cloud-init.yaml`.
 
 ```bash
-sudo nano /etc/netplan/99-eth0-static.yaml
+sudo nano /etc/netplan/99-wlan0-static.yaml
 ```
 
 **3.** Type this in, using **your** values from Step 1:
@@ -573,16 +433,15 @@ sudo nano /etc/netplan/99-eth0-static.yaml
 ```yaml
 network:
   version: 2
-  ethernets:
-    eth0:
+  wifis:
+    wlan0:
       dhcp4: false
-      addresses: [192.168.137.11/24]
+      addresses: [192.168.0.11/24]
       routes:
         - to: default
-          via: 192.168.137.1
+          via: 192.168.0.1
       nameservers:
-        addresses: [8.8.8.8, 1.1.1.1]
-      optional: true
+        addresses: [192.168.0.1, 8.8.8.8]
 ```
 
 > **YAML is strict about indentation.** Use **spaces, never Tab**, exactly 2 per level as
@@ -594,96 +453,97 @@ Save with `Ctrl+O`, `Enter`, then exit with `Ctrl+X`.
 rewriting the network config on later boots:
 
 ```bash
-sudo chmod 600 /etc/netplan/99-eth0-static.yaml
+sudo chmod 600 /etc/netplan/99-wlan0-static.yaml
 echo "network: {config: disabled}" | sudo tee /etc/cloud/cloud.cfg.d/99-disable-network-config.cfg
 ```
 
-**5.** Check the file, then apply it:
+**5.** Check the file:
 
 ```bash
 sudo netplan generate          # no output = no mistakes. An error names the line to fix.
+```
+
+**6.** Apply it. The SSH session freezes here:
+
+```bash
 sudo netplan apply
 ```
 
-**6.** Test it:
+**7.** From your **laptop**, after about 20 seconds:
 
 ```bash
-ip -br addr show eth0          # -> eth0  UP  192.168.137.11/24
-ping -c3 192.168.137.1         # the laptop answers?
-ping -c3 8.8.8.8               # the internet answers?
+ssh-keygen -R 192.168.0.11     # only if SSH complains about a changed host key
+ssh ubuntu@192.168.0.11
 ```
 
-**7.** From your **laptop**, you can now SSH in:
+On the Pi, check:
 
 ```bash
-ssh ubuntu@192.168.137.11
+ip -br addr show wlan0         # -> wlan0  UP  192.168.0.11/24
+ping -c3 192.168.0.1           # the router answers?
+ping -c3 google.com            # internet and DNS work?
 ```
 
-**To undo Method A:** delete both files, then apply:
+**To undo Method A:** delete both files, then apply. The Pi goes back to a DHCP address:
 
 ```bash
-sudo rm /etc/netplan/99-eth0-static.yaml /etc/cloud/cloud.cfg.d/99-disable-network-config.cfg
+sudo rm /etc/netplan/99-wlan0-static.yaml /etc/cloud/cloud.cfg.d/99-disable-network-config.cfg
 sudo netplan apply
 ```
 
 ---
 
-#### Method B — The `setup_network.sh` script (over SSH)
+#### Method B — The `setup_network.sh` script
 
-The script writes the same kind of netplan file, plus a backup, validation and the hotspot option (Part 4.4).
-
-**1. Get the script onto the Pi** (details in [Part 3.6](#36-get-the-lab-scripts-onto-the-pi)). The quickest way, run on your **laptop** from the folder you downloaded it to:
-
-```bash
-ssh ubuntu@<CURRENT_PI_IP> "mkdir -p ~/lab01"
-scp setup_network.sh ubuntu@<CURRENT_PI_IP>:~/lab01/
-```
-
-With an IPv6 link-local address, `scp` needs brackets and quotes:
-`scp setup_network.sh 'ubuntu@[fe80::…%enp130s0]:~/lab01/'`
+The script keeps the Wi-Fi network Imager set up, gives it the static address, and writes
+everything into one file, `/etc/netplan/01-robot-network.yaml`.
 
 ⬇️ [setup_network.sh](code/setup_network.sh)
 
-**2. SSH in and edit the SETTINGS block** with your values from Step 1:
+**1. Edit the SETTINGS block** with your values from Step 1:
 
 ```bash
-ssh ubuntu@<CURRENT_PI_IP>
 cd ~/lab01
 nano setup_network.sh
 ```
 
 ```bash
-ETH_MODE="static"
-ETH_ADDRESS="192.168.137.11/24"     # <- your value: .11 / .12 / .13 for robot01 / 02 / 03
-ETH_GATEWAY="192.168.137.1"         # <- your value
+WIFI_MODE="keep"                  # keep the Wi-Fi network from Imager
+WIFI_IPV4="static"
+WIFI_ADDRESS="192.168.0.11/24"    # <- .11 / .12 / .13 for robot01 / 02 / 03
+WIFI_GATEWAY="192.168.0.1"        # <- your router
+DNS_SERVERS="192.168.0.1,8.8.8.8"
 ```
 
-**3. Run it:**
+**2. Run it:**
 
 ```bash
 sudo bash setup_network.sh
 ```
 
 The script:
-- backs up the current netplan files and writes one file, `/etc/netplan/01-robot-network.yaml`
-- keeps the Wi-Fi network you set in Imager (`WIFI_MODE="keep"`)
+- stops if another device already answers on `WIFI_ADDRESS`
+- backs up the current netplan files to `/etc/netplan-backups/` and writes `/etc/netplan/01-robot-network.yaml`
 - checks the new file with `netplan generate` before applying it, and restores the backup if the check fails
 - stops cloud-init from rewriting the network config on later boots
+- keeps going even when the SSH session drops, so the change is applied in full
 
-**4. Reconnect.** If you were connected over the cable, the session drops when the address
-changes. That is expected. From the laptop:
+**3. Reconnect** after about 20 seconds, from the laptop:
 
 ```bash
-ssh ubuntu@192.168.137.11      # the ETH_ADDRESS you chose
-ping -c3 8.8.8.8               # on the Pi: internet works?
+ssh-keygen -R 192.168.0.11     # only if SSH complains about a changed host key
+ssh ubuntu@192.168.0.11
 ```
 
-> **Plugging eth0 into a router instead of your laptop?** With Method A, delete
-> `99-eth0-static.yaml` and run `sudo netplan apply`. With Method B, set `ETH_MODE="dhcp"` and re-run
-> the script. A static `192.168.137.11` has no route on a normal router network.
-
 Other options: `sudo bash setup_network.sh --show` prints the current config, and
-`--restore` puts the previous one back.
+`sudo bash setup_network.sh --restore` puts the previous one back (run it at the console if
+the network is gone).
+
+> **To join a different Wi-Fi network later,** set `WIFI_MODE="client"` plus `WIFI_SSID` and
+> `WIFI_PASSWORD`, adjust `WIFI_ADDRESS` / `WIFI_GATEWAY` to the new router, and run the script again.
+
+> **Ethernet still works.** With `ETH_MODE="dhcp"` (the default), plugging a cable from the
+> Pi to the router gives eth0 an address too. That is a handy way back in if Wi-Fi fails.
 
 ### 4.2 Reach the Pi by name (`robot01.local`)
 
@@ -694,74 +554,66 @@ sudo apt install -y avahi-daemon
 
 From now on `ssh ubuntu@robot01.local` works from macOS, Linux and Windows 10/11 on the same network.
 
-### 4.3 Wi-Fi for the fleet
+**Shortcut names for the fleet.** Add this to `~/.ssh/config` on the laptop (create the file
+if needed). Then `ssh robot01` works, and so do `scp` and VS Code:
 
-On the robot there is no cable, so the robots reach each other and your laptop over Wi-Fi.
-ROS 2 finds other machines with **multicast** on the local network, so this network must:
+```
+Host robot01
+    HostName 192.168.0.11
+Host robot02
+    HostName 192.168.0.12
+Host robot03
+    HostName 192.168.0.13
+Host robot01 robot02 robot03
+    User ubuntu
+```
+
+Using the static addresses rather than `.local` names makes it work even when a network
+blocks name discovery.
+
+### 4.3 Check the fleet network
+
+ROS 2 finds other machines with **multicast** on the local network, so the router must:
 
 - carry **all three robots and the laptop** on the same subnet
 - allow device-to-device traffic (no "client isolation" / "AP isolation")
 - pass multicast
 
-Campus and guest Wi-Fi usually fails the last two. The reliable setup is a **small
-dedicated router** for the robots, with its internet port plugged into the building network if you want internet.
-In the router's settings, turn off *AP/client isolation* and give each robot's MAC a **DHCP
-reservation**, so `robot01` always gets the same Wi-Fi address.
+A home or lab router does this by default. Campus and guest Wi-Fi usually doesn't. In the
+router's Wi-Fi settings, make sure *AP isolation* / *client isolation* is **off**.
 
-**If you set Wi-Fi in Imager,** it is already configured. Check it:
+Once two robots are set up, check from `robot01`:
 
 ```bash
-ip -br addr show wlan0         # -> wlan0  UP  192.168.1.101/24
+ping -c3 192.168.0.12      # robot02
+ping -c3 robot02.local     # by name (avahi)
 ```
 
-**To join a different network later,** use `setup_network.sh`:
+### 4.4 Turn off Wi-Fi power saving
+
+By default the Pi's Wi-Fi dozes between packets to save power. You notice it as a ping that
+fails or takes a second the first time, and ROS 2 traffic between robots gets delayed.
+Turn it off, now and at every boot:
 
 ```bash
-WIFI_MODE="client"
-WIFI_SSID="robots-5g"
-WIFI_PASSWORD="your-password"
+sudo apt install -y iw
+sudo tee /etc/systemd/system/wifi-powersave-off.service >/dev/null <<'EOF'
+[Unit]
+Description=Turn off Wi-Fi power saving on wlan0
+After=sys-subsystem-net-devices-wlan0.device
+BindsTo=sys-subsystem-net-devices-wlan0.device
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/iw dev wlan0 set power_save off
+
+[Install]
+WantedBy=sys-subsystem-net-devices-wlan0.device
+EOF
+sudo systemctl daemon-reload
+sudo systemctl enable --now wifi-powersave-off.service
+iw dev wlan0 get power_save       # -> Power save: off
 ```
-
-```bash
-sudo bash setup_network.sh
-```
-
-Then check that the robots can see each other, from `robot01`:
-
-```bash
-ping -c3 robot02.local
-ping -c3 robot03.local
-```
-
-### 4.4 Optional — Wi-Fi hotspot on the Pi
-
-Make one Pi broadcast its own Wi-Fi network so a laptop can connect with no router or
-cable. **Do this while connected over Ethernet.** Hotspot mode replaces the Wi-Fi client
-connection, so this Pi then gets internet only through eth0, and it drops out of the
-robots' Wi-Fi from Part 4.3. Use it for a single robot on the bench, not for the fleet.
-
-In the SETTINGS block of `setup_network.sh`:
-
-```bash
-WIFI_MODE="ap"
-AP_SSID="$(hostname)"         # the network name = your hostname, e.g. robot01
-AP_PASSWORD="choose-8+-chars"
-```
-
-```bash
-sudo bash setup_network.sh
-```
-
-The script installs **NetworkManager**, which netplan needs to run a hotspot, and runs it on
-wlan0 only. eth0 stays on the default networking service, systemd-networkd. Join the
-`robot01` Wi-Fi network from your laptop, then:
-
-```bash
-ssh ubuntu@10.42.0.1
-```
-
-To go back to a Wi-Fi client, set `WIFI_MODE="client"` plus `WIFI_SSID` / `WIFI_PASSWORD`
-and run the script again.
 
 ---
 
@@ -893,7 +745,7 @@ the raw output of every check. Copy the reports to your laptop:
 
 ```bash
 # on the laptop
-scp 'robot01:robot_report_*' .        # uses the ~/.ssh/config shortcut from Part 3.4
+scp 'robot01:robot_report_*' .        # uses the ~/.ssh/config shortcut from Part 4.2
 scp 'robot02:robot_report_*' .
 scp 'robot03:robot_report_*' .
 ```
@@ -912,12 +764,10 @@ Go back to Part 1 with the next SD card. What changes per robot:
 | Step | robot01 | robot02 | robot03 |
 |---|---|---|---|
 | Imager hostname (1.3) | `robot01` | `robot02` | `robot03` |
-| `ETH_ADDRESS` (4.1) | `a.b.c.11/24` | `a.b.c.12/24` | `a.b.c.13/24` |
-| Router DHCP reservation (4.3) | its MAC | its MAC | its MAC |
+| `WIFI_ADDRESS` (4.1) | `192.168.0.11/24` | `192.168.0.12/24` | `192.168.0.13/24` |
 
-Everything else, including the username, the Wi-Fi network and the scripts, is the same.
-**Only one robot on the bench cable at a time**: they all use the laptop as gateway, but
-each has its own address.
+Everything else, including the username, the Wi-Fi network, the gateway and the scripts, is the same.
+When a new robot boots, it gets a DHCP address first: find it (Part 3.1), then give it its static one (Part 4.1).
 
 ---
 
@@ -928,17 +778,20 @@ each has its own address.
 | Nothing happens at power-on, no red LED | Check the supply. On the robot: battery charged, board switch ON |
 | Red LED blinks or goes off under load; `robot_check.sh` says under-voltage | The 5 V supply is too weak: charge the battery, or use the official 3 A USB-C supply on the bench |
 | Green LED blinks a pattern and it doesn't boot | The SD card isn't readable: re-flash it, or try another card |
+| The Pi never appears on the router | Wrong Wi-Fi name, password or country in Imager. Check at the console (`networkctl status wlan0`), or re-flash with the right values |
+| `ping` or `ssh` fails the first time, works on the next try | Wi-Fi power saving (Part 4.4), or the Pi is still booting |
 | `Permission denied` at the first SSH login | cloud-init hasn't finished. Wait 2–3 minutes and try again |
+| `Permission denied (publickey)` | Password login is off on the Pi. Turn it on at the console (Part 3.2.1), or check the username |
+| `Permission denied (publickey,password)` | The username or password is wrong. The username is the one from Imager |
 | `sudo: unable to resolve host ...` | `/etc/hosts` still has the old name on the `127.0.1.1` line (Part 2.1, step 5) |
 | Hostname goes back to `ubuntu` after a reboot | Add `preserve_hostname: true` (Part 2.1, step 6) |
-| `ssh: Could not resolve hostname robot01.local` | Install `avahi-daemon` (Part 4.2) or use the IP address |
-| Can't find the Pi's IP | Ping `ff02::1%<your-ethernet-if>` and use the Pi's `fe80::` address (Part 3.2.2); or plug in HDMI + keyboard and run `ip -br addr` |
-| Pi answers on IPv6 but has no `192.168.x.x` address | Your laptop doesn't hand out addresses (script or manual IP). SSH in over `fe80::…%<if>` and set the static IP (Part 4.1) |
-| `Permission denied (publickey)` | Password login is off on the Pi. Turn it on at the console (Part 3.3.1), or check the username |
-| `REMOTE HOST IDENTIFICATION HAS CHANGED` | Re-flashed, or another robot now has that address: `ssh-keygen -R <address>` |
-| Sharing works but the Pi is in a different range from the laptop | Part 4.1: find the laptop's Ethernet address, then set the Pi's static IP (Method A needs only a monitor and keyboard) |
+| `ssh: Could not resolve hostname robot01.local` | Install `avahi-daemon` (Part 4.2), or use the static IP |
+| `REMOTE HOST IDENTIFICATION HAS CHANGED` | Re-flashed, or another robot used that address before: `ssh-keygen -R <address>` |
 | `netplan generate` error about indentation or `mapping values` | A Tab or a wrong number of spaces in the YAML. Retype the indentation with spaces (Part 4.1, Method A step 3) |
-| Lost SSH after `setup_network.sh` | Reconnect to `ETH_ADDRESS`. If that fails, put the SD card in your laptop, delete `/etc/netplan/01-robot-network.yaml` on the `writable` partition and copy the backup from `/etc/netplan-backups/` |
+| Pi unreachable after setting the static IP | Wait a minute and try the new address. Still nothing: monitor + keyboard, then `sudo rm /etc/netplan/99-wlan0-static.yaml && sudo netplan apply` (Method A) or `sudo bash ~/lab01/setup_network.sh --restore` (Method B). No monitor? A cable from the Pi to the router gives eth0 a DHCP address to SSH into |
+| Static IP works but no internet (`ping 8.8.8.8` fails) | Wrong `via` / `WIFI_GATEWAY`: it must be the router's address from `ip route` (Part 4.1, Step 1) |
+| `ping 8.8.8.8` works but `ping google.com` fails | DNS: check the `nameservers` addresses |
+| Another device gets the robot's address | The address is inside the router's DHCP pool (Part 4.1, Step 2) |
 | `ping robot02.local` fails from `robot01`, but both have Wi-Fi | Not on the same network, or the router isolates clients (Part 4.3) |
 | `Could not get lock /var/lib/dpkg/lock-frontend` | unattended-upgrades is running. Wait |
 | `Release file ... is not valid yet` | The clock is wrong. Check `timedatectl` and the internet connection (Part 5) |
@@ -952,10 +805,11 @@ each has its own address.
 - [ ] SD card flashed with Ubuntu Server 22.04 LTS (64-bit), with hostname, user, SSH and Wi-Fi set in Imager
 - [ ] Unique hostname set: `hostname` prints `robot01` / `robot02` / `robot03`
 - [ ] Connected over SSH from your laptop (key-based login set up, `ssh robot01` works)
-- [ ] Internet shared from the laptop: `ping -c3 8.8.8.8` works on the Pi
-- [ ] Static IP on eth0 (`.11` / `.12` / `.13`)
+- [ ] The Pi joined the router's Wi-Fi: `ping -c3 8.8.8.8` works on the Pi
+- [ ] Static IP on wlan0 (`192.168.0.11` / `.12` / `.13`), outside the router's DHCP pool
 - [ ] `avahi-daemon` installed: `ssh ubuntu@robot01.local` works
-- [ ] On the robots' Wi-Fi: each robot can `ping` the other two by name
+- [ ] Wi-Fi power saving off: `iw dev wlan0 get power_save` says `off`
+- [ ] Each robot can `ping` the other two
 - [ ] System fully updated and clock synchronised
 - [ ] Swap configured: `sudo bash setup_swap.sh --status`
 - [ ] UTF-8 locale, `universe` repository and the Part 7.2 tools installed

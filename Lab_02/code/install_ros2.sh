@@ -70,7 +70,7 @@ say "Checking the system"
 . /etc/os-release
 [ "${VERSION_CODENAME:-}" = "jammy" ] || die "This is $PRETTY_NAME. ROS 2 Humble debs need Ubuntu 22.04 (jammy)."
 [ "$(dpkg --print-architecture)" = "arm64" ] || die "Not arm64 - flash the 64-bit Ubuntu Server image."
-ping -c1 -W3 8.8.8.8 >/dev/null 2>&1 || die "No internet. Fix that first (Lab 01, Part 3.1)."
+ping -c1 -W3 8.8.8.8 >/dev/null 2>&1 || die "No internet. Check the Wi-Fi and the router address (Lab 01, Part 4.1)."
 timedatectl show -p NTPSynchronized --value 2>/dev/null | grep -q yes \
   || warn "Clock not synchronised ($(date)). If apt says 'not valid yet', wait for NTP."
 ok "$PRETTY_NAME, arm64, online"

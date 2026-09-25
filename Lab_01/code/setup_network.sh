@@ -9,12 +9,13 @@
 #
 # This script replaces those files with ONE file you control:
 #
-#   eth0   static IP (for the laptop <-> Pi cable) or DHCP (for a router)
 #   wlan0  keep | client | ap | off
 #            keep   - keep the Wi-Fi network Imager set up (default)
 #            client - join the Wi-Fi network given below
 #            ap     - broadcast a hotspot so a laptop can connect directly
 #            off    - no Wi-Fi config
+#          with a static IP (default) or DHCP from the router
+#   eth0   DHCP (default, for a cable to the router) or a static IP
 #
 # It also stops cloud-init from rewriting the network config on later boots,
 # and backs up the old files so --restore can put them back.
@@ -29,18 +30,21 @@
 # =============================================================================
 
 # ----------------------------- SETTINGS --------------------------------------
-ETH_MODE="static"                 # "static" or "dhcp"
-# Use the row that matches YOUR LAPTOP. The last number is the robot number:
-#   robot01 -> .11   robot02 -> .12   robot03 -> .13
-#   Windows (ICS)   : 192.168.137.11/24  gateway 192.168.137.1
-#   macOS / Linux   : 192.168.0.11/24    gateway 192.168.0.1
-ETH_ADDRESS="192.168.137.11/24"
-ETH_GATEWAY="192.168.137.1"
-DNS_SERVERS="8.8.8.8,1.1.1.1"
-
 WIFI_MODE="keep"                  # "keep" | "client" | "ap" | "off"
 WIFI_SSID=""                      # client mode: network to join
 WIFI_PASSWORD=""                  # client mode: its password
+
+WIFI_IPV4="static"                # keep/client modes: "static" or "dhcp"
+# Same first three numbers as the router; the last one is 10 + robot number:
+#   robot01 -> .11   robot02 -> .12   robot03 -> .13
+# Pick addresses OUTSIDE the router's DHCP range (Lab 01, Part 4.1).
+WIFI_ADDRESS="192.168.0.11/24"
+WIFI_GATEWAY="192.168.0.1"        # the router
+DNS_SERVERS="192.168.0.1,8.8.8.8" # the router first, then a public server
+
+ETH_MODE="dhcp"                   # "dhcp" or "static" (optional cable)
+ETH_ADDRESS="192.168.1.11/24"     # static only: must NOT be in the Wi-Fi subnet
+ETH_GATEWAY=""                    # static only: leave empty for no default route
 AP_SSID="$(hostname)"             # ap mode: hotspot name (default = hostname)
 AP_PASSWORD="changeme123"         # ap mode: at least 8 characters
 # -----------------------------------------------------------------------------
@@ -84,9 +88,21 @@ fi
 # ----------------------------- VALIDATE SETTINGS -----------------------------
 case "$ETH_MODE"  in static|dhcp) ;; *) die "ETH_MODE must be static or dhcp" ;; esac
 case "$WIFI_MODE" in keep|client|ap|off) ;; *) die "WIFI_MODE must be keep, client, ap or off" ;; esac
+case "$WIFI_IPV4" in static|dhcp) ;; *) die "WIFI_IPV4 must be static or dhcp" ;; esac
 if [ "$ETH_MODE" = "static" ]; then
-  [[ "$ETH_ADDRESS" == */* ]] || die "ETH_ADDRESS needs a prefix, e.g. 192.168.137.12/24"
-  [ -n "$ETH_GATEWAY" ] || die "ETH_GATEWAY is empty"
+  [[ "$ETH_ADDRESS" == */* ]] || die "ETH_ADDRESS needs a prefix, e.g. 192.168.1.11/24"
+fi
+WIFI_STATIC=0
+if [ "$WIFI_IPV4" = "static" ] && { [ "$WIFI_MODE" = "keep" ] || [ "$WIFI_MODE" = "client" ]; }; then
+  WIFI_STATIC=1
+  [[ "$WIFI_ADDRESS" == */* ]] || die "WIFI_ADDRESS needs a prefix, e.g. 192.168.0.11/24"
+  [ -n "$WIFI_GATEWAY" ] || die "WIFI_GATEWAY is empty - use the router's address"
+  # Is another device already using this address? (Our own current address is fine.)
+  NEW_IP=${WIFI_ADDRESS%/*}
+  if ! ip -4 -o addr show | grep -q " $NEW_IP/"; then
+    ping -c2 -W1 "$NEW_IP" >/dev/null 2>&1 \
+      && die "$NEW_IP already answers on the network - another device has it. Pick a different WIFI_ADDRESS."
+  fi
 fi
 if [ "$WIFI_MODE" = "client" ]; then
   [ -n "$WIFI_SSID" ] || die "WIFI_MODE=client needs WIFI_SSID"
@@ -117,7 +133,7 @@ ok "$BACKUP"
 
 # ----------------------------- BUILD THE NEW CONFIG --------------------------
 say "Writing $OUT_FILE"
-export ETH_MODE ETH_ADDRESS ETH_GATEWAY DNS_SERVERS WIFI_MODE WIFI_SSID WIFI_PASSWORD AP_SSID AP_PASSWORD
+export ETH_MODE ETH_ADDRESS ETH_GATEWAY DNS_SERVERS WIFI_MODE WIFI_STATIC WIFI_ADDRESS WIFI_GATEWAY WIFI_SSID WIFI_PASSWORD AP_SSID AP_PASSWORD
 NEW_YAML=$(python3 - "$BACKUP" <<'PY'
 import glob, os, sys, yaml
 e = os.environ
@@ -138,10 +154,9 @@ net = {"version": 2, "renderer": "networkd", "ethernets": {}}
 
 eth = {"optional": True}           # do not stall boot when the cable is out
 if e["ETH_MODE"] == "static":
-    eth.update({"dhcp4": False,
-                "addresses": [e["ETH_ADDRESS"]],
-                "routes": [{"to": "default", "via": e["ETH_GATEWAY"]}],
-                "nameservers": {"addresses": dns}})
+    eth.update({"dhcp4": False, "addresses": [e["ETH_ADDRESS"]]})
+    if e["ETH_GATEWAY"]:
+        eth["routes"] = [{"to": "default", "via": e["ETH_GATEWAY"], "metric": 700}]
 else:
     eth["dhcp4"] = True
 net["ethernets"]["eth0"] = eth
@@ -158,6 +173,17 @@ elif mode == "ap":
     net["wifis"] = {"wlan0": {"renderer": "NetworkManager", "optional": True,
                               "access-points": {e["AP_SSID"]: {
                                   "password": e["AP_PASSWORD"], "mode": "ap"}}}}
+
+if e["WIFI_STATIC"] == "1":
+    if not net.get("wifis"):
+        sys.exit("WIFI_MODE=keep, but there is no Wi-Fi network to keep. Use WIFI_MODE=client.")
+    for cfg in net["wifis"].values():
+        for k in ("dhcp4", "addresses", "routes", "gateway4", "nameservers"):
+            cfg.pop(k, None)
+        cfg.update({"dhcp4": False,
+                    "addresses": [e["WIFI_ADDRESS"]],
+                    "routes": [{"to": "default", "via": e["WIFI_GATEWAY"]}],
+                    "nameservers": {"addresses": dns}})
 
 print(yaml.safe_dump({"network": net}, default_flow_style=False, sort_keys=False))
 PY
@@ -181,20 +207,27 @@ echo "network: {config: disabled}" > "$CLOUD_CFG"
 ok "cloud-init will no longer rewrite the network config"
 
 # ----------------------------- APPLY -----------------------------------------
-say "Applying (an SSH session on a changed link will drop here)"
-netplan apply
-sleep 3
-ok "applied"
+ME=$(logname 2>/dev/null || echo ubuntu)
+if [ "$WIFI_STATIC" = "1" ]; then
+  echo
+  echo -e "\033[1;33m  Over SSH on Wi-Fi, this session freezes or drops now. That is expected.\033[0m"
+  echo -e "\033[1;33m  Wait ~20 s, then reconnect:  ssh $ME@${WIFI_ADDRESS%/*}\033[0m"
+fi
+say "Applying"
+# Keep going if the SSH session drops: the new config must be applied in full.
+trap '' HUP
+nohup netplan apply > "$BACKUP/apply.log" 2>&1
+sleep 5
+ok "applied (log: $BACKUP/apply.log)"
 
 say "Result"
 cat "$OUT_FILE"
 echo
 ip -br addr
 echo
-case "$ETH_MODE" in
-  static) echo "eth0 is ${ETH_ADDRESS%/*}   ->  ssh $(logname 2>/dev/null || echo ubuntu)@${ETH_ADDRESS%/*}" ;;
-esac
-[ "$WIFI_MODE" = "ap" ] && echo "Hotspot '$AP_SSID' is up. Join it, then:  ssh $(logname 2>/dev/null || echo ubuntu)@10.42.0.1"
+[ "$WIFI_STATIC" = "1" ] && echo "wlan0 is ${WIFI_ADDRESS%/*}   ->  ssh $ME@${WIFI_ADDRESS%/*}"
+[ "$ETH_MODE" = "static" ] && echo "eth0 is ${ETH_ADDRESS%/*}"
+[ "$WIFI_MODE" = "ap" ] && echo "Hotspot '$AP_SSID' is up. Join it, then:  ssh $ME@10.42.0.1"
 echo "Test internet with:  ping -c3 8.8.8.8"
 echo "Undo with:           sudo bash $0 --restore"
 echo
