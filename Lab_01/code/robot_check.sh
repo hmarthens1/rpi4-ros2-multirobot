@@ -224,7 +224,9 @@ else
 fi
 grep -rhsE '^(deb|Components:|Suites:)' /etc/apt/sources.list /etc/apt/sources.list.d/ | grep -q universe \
   && pass "'universe' repository enabled" || fail "'universe' not enabled - run: sudo add-apt-repository universe"
-UPG=$(apt list --upgradable 2>/dev/null | grep -c upgradable)
+# Count what full-upgrade would really install: "apt list --upgradable" also lists
+# phased updates that Ubuntu deliberately holds back for now.
+UPG=$(apt-get -s -o Debug::NoLocking=1 full-upgrade 2>/dev/null | grep -c '^Inst ')
 [ "$UPG" -eq 0 ] && pass "System up to date" || warn "$UPG packages can be upgraded - run: sudo apt update && sudo apt full-upgrade"
 MISSING=""
 for c in curl git i2cdetect gpioinfo lsusb iw vcgencmd; do have $c || MISSING="$MISSING $c"; done
