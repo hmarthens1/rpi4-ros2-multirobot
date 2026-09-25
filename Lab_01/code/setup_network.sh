@@ -175,9 +175,12 @@ elif mode == "ap":
                                   "password": e["AP_PASSWORD"], "mode": "ap"}}}}
 
 if e["WIFI_STATIC"] == "1":
-    if not net.get("wifis"):
+    # "wifis:" can also hold settings that are not interfaces, e.g.
+    # "renderer: networkd" (Raspberry Pi Imager writes that). Skip those.
+    ifaces = [c for c in (net.get("wifis") or {}).values() if isinstance(c, dict)]
+    if not ifaces:
         sys.exit("WIFI_MODE=keep, but there is no Wi-Fi network to keep. Use WIFI_MODE=client.")
-    for cfg in net["wifis"].values():
+    for cfg in ifaces:
         for k in ("dhcp4", "addresses", "routes", "gateway4", "nameservers"):
             cfg.pop(k, None)
         cfg.update({"dhcp4": False,
