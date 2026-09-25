@@ -309,8 +309,8 @@ detail "All GPIO lines" "gpioinfo gpiochip0 2>/dev/null"
 
 # -----------------------------------------------------------------------------
 section "USB, serial and camera devices (lidar / IMU / camera go here)"
-USB_N=$(lsusb 2>/dev/null | grep -vic "root hub")
-info "USB devices (not counting hubs): ${USB_N:-unknown}"
+USB_N=$(lsusb 2>/dev/null | grep -vic " hub")   # the Pi 4 has a built-in VIA USB hub
+info "USB devices (not counting hubs): ${USB_N:-unknown}"; lsusb 2>/dev/null | grep -vi " hub" | while read -r l; do info "  ${l#*ID }"; done
 SER=$(ls /dev/ttyUSB* /dev/ttyACM* 2>/dev/null | tr '\n' ' ')
 [ -n "$SER" ] && info "USB serial ports: $SER" || info "No USB serial ports (/dev/ttyUSB*, /dev/ttyACM*) yet"
 [ -d /dev/serial/by-id ] && for l in /dev/serial/by-id/*; do info "  $(basename "$l") -> $(readlink -f "$l")"; done
