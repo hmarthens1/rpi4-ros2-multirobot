@@ -280,9 +280,25 @@ done
 if [ -e /dev/i2c-1 ]; then
   pass "I2C bus 1 present (/dev/i2c-1)"
   if have i2cdetect && { [ "$IS_ROOT" -eq 1 ] || [ -r /dev/i2c-1 -a -w /dev/i2c-1 ]; }; then
-    ADDRS=$(i2cdetect -y 1 2>/dev/null | awk 'NR>1{for(i=2;i<=NF;i++) if($i!="--") printf "0x%s ", $i}')
-    [ -n "$ADDRS" ] && pass "I2C bus 1 devices: $ADDRS(the board's MCU should be one of these)" \
-                    || warn "No device answered on I2C bus 1 - is the expansion board fitted and its power switch ON?"
+    # The board's microcontroller is at 0x7A. That is above 0x77, in the range
+    # i2cdetect never scans, so ask it directly the way HiwonderSDK/Board.py
+    # does: write the register number (0 = battery), then read 2 bytes as a
+    # separate transfer. Some reads come back garbled, so retry a few times.
+    MV=""
+    for try in 1 2 3 4 5 6; do
+      i2ctransfer -a -y 1 w1@0x7a 0x00 >/dev/null 2>&1 || continue
+      R=$(i2ctransfer -a -y 1 r2@0x7a 2>/dev/null) || continue
+      set -- $R; V=$(( ($2 << 8) | $1 ))
+      [ "$V" -ge 3000 ] && [ "$V" -le 20000 ] && { MV=$V; break; }
+    done
+    if [ -n "$MV" ]; then
+      pass "Expansion board found (MCU at 0x7A): battery $((MV/1000)).$(printf '%02d' $(((MV%1000)/10))) V"
+      [ "$MV" -lt 7000 ] && warn "Battery is low ($MV mV) - charge it before driving the motors"
+    else
+      warn "Expansion board MCU at 0x7A didn't answer - is the board fitted and its power switch ON?"
+    fi
+    OTHER=$(i2cdetect -y 1 2>/dev/null | awk 'NR>1{for(i=2;i<=NF;i++) if($i!="--") printf "0x%s ", $i}')
+    [ -n "$OTHER" ] && info "Other I2C devices on bus 1: $OTHER(sensors on ports P7/P8/P9)"
   else
     info "Skipped the I2C scan (needs i2c-tools and sudo or I2C permission)"
   fi
@@ -297,7 +313,7 @@ fi
 detail "config.txt (active lines)" "grep -vE '^\s*(#|$)' $CONFIG_TXT; echo; ls /boot/firmware/*.txt"
 detail "cmdline.txt" "cat $CMDLINE_TXT"
 detail "UARTs" "ls -l /dev/serial* /dev/ttyS* /dev/ttyAMA* 2>/dev/null; systemctl list-units 'serial-getty@*' --no-legend 2>/dev/null; ls /sys/class/bluetooth 2>/dev/null"
-detail "I2C" "ls -l /dev/i2c-* 2>/dev/null; i2cdetect -l 2>/dev/null; echo; i2cdetect -y 1 2>/dev/null"
+detail "I2C" "ls -l /dev/i2c-* 2>/dev/null; i2cdetect -l 2>/dev/null; echo; i2cdetect -y 1 2>/dev/null; echo; echo 'battery register (0x7A reg 0), 3 reads:'; for i in 1 2 3; do i2ctransfer -a -y 1 w1@0x7a 0x00 && i2ctransfer -a -y 1 r2@0x7a; done"
 {
   echo; echo "===== GPIO lines used by the expansion board"
   for g in 2 3 4 27 14 15 6 12 13 23 16 26 22 24 8 7; do

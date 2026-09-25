@@ -21,10 +21,10 @@ title: Home
 |-----|-------|
 | [Lab 01 — Raspberry Pi 4 Setup & SSH](Lab_01/) | Flash Ubuntu Server 22.04, join the Wi-Fi router, connect over SSH, give each robot a static Wi-Fi IP, update, add swap, prepare for ROS 2, and run `robot_check.sh` |
 | [Lab 02 — ROS 2 Humble (ros-base)](Lab_02/) | Install `ros-humble-ros-base` and the build tools, set the fleet's `ROS_DOMAIN_ID`, talk between the three robots, one namespace per robot, a first workspace |
+| [Lab 03 — Hiwonder Expansion Board SDK](Lab_03/) | Install `HiwonderSDK` on Ubuntu 22.04 and check the board through it: battery, RGB LEDs, buzzer, motors |
 
 <!--
-Planned, once the robot_check.sh reports are in:
-| Lab 03 — Expansion board | I2C motor/servo controller, battery voltage, keys, LEDs, buzzer, RGB |
+Planned:
 | Lab 04 — Sensors | USB lidar, serial IMU, camera |
 -->
 
@@ -47,7 +47,7 @@ The **Hiwonder RaspberryPi-Adapter-4chMotorDrive V3.x** sits on the 40-pin heade
 
 | Function | Pi pins | Notes |
 |---|---|---|
-| 4 DC motors, 6 PWM servos, battery voltage | I2C1: GPIO2/3 (pins 3, 5) | through an on-board microcontroller; I2C also on ports P7, P8, P9 |
+| 4 DC motors, 6 PWM servos, battery voltage | I2C1: GPIO2/3 (pins 3, 5) | through an on-board microcontroller at address `0x7A` (Lab 03); I2C also on ports P7, P8, P9 |
 | Serial bus servos + port P12 | UART: GPIO14/15 (pins 8, 10) | half-duplex through a 74HC126 buffer, direction on GPIO4 / GPIO27 |
 | Keys 1 and 2 | GPIO13, GPIO23 | to GND, need a pull-up |
 | LED1, LED2 | GPIO16, GPIO26 | active low |
