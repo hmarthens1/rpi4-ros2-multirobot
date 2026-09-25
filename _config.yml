@@ -1,0 +1,16 @@
+title: RPi4 + ROS 2 Multi-Robot
+description: Raspberry Pi 4 · Ubuntu Server 22.04 LTS · ROS 2 Humble · three robots
+remote_theme: pages-themes/hacker@v0.2.0
+plugins:
+  - jekyll-remote-theme
+
+# Syntax highlighting
+highlighter: rouge
+markdown: kramdown
+kramdown:
+  syntax_highlighter: rouge
+
+# What Jekyll does NOT build into the published site.
+exclude:
+  - README.md
+  - .gitignore
