@@ -571,6 +571,11 @@ Host robot01 robot02 robot03
 Using the static addresses rather than `.local` names makes it work even when a network
 blocks name discovery.
 
+> **`robot01.local` doesn't resolve on the laptop, but `ssh 192.168.0.11` works?** `.local`
+> names travel by multicast on `224.0.0.251`. Some routers and Wi-Fi cards drop that group in
+> one direction while ROS 2's multicast (`239.255.0.1`) still gets through. Use the static
+> addresses and the `~/.ssh/config` above. It doesn't affect ROS 2.
+
 ### 4.3 Check the fleet network
 
 ROS 2 finds other machines with **multicast** on the local network, so the router must:
@@ -600,15 +605,16 @@ sudo apt install -y iw
 sudo tee /etc/systemd/system/wifi-powersave-off.service >/dev/null <<'EOF'
 [Unit]
 Description=Turn off Wi-Fi power saving on wlan0
+Wants=sys-subsystem-net-devices-wlan0.device
 After=sys-subsystem-net-devices-wlan0.device
-BindsTo=sys-subsystem-net-devices-wlan0.device
 
 [Service]
 Type=oneshot
 ExecStart=/usr/sbin/iw dev wlan0 set power_save off
+RemainAfterExit=yes
 
 [Install]
-WantedBy=sys-subsystem-net-devices-wlan0.device
+WantedBy=multi-user.target
 EOF
 sudo systemctl daemon-reload
 sudo systemctl enable --now wifi-powersave-off.service

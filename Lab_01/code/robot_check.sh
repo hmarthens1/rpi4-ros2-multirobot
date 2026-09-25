@@ -312,17 +312,26 @@ info "USB devices (not counting hubs): ${USB_N:-unknown}"
 SER=$(ls /dev/ttyUSB* /dev/ttyACM* 2>/dev/null | tr '\n' ' ')
 [ -n "$SER" ] && info "USB serial ports: $SER" || info "No USB serial ports (/dev/ttyUSB*, /dev/ttyACM*) yet"
 [ -d /dev/serial/by-id ] && for l in /dev/serial/by-id/*; do info "  $(basename "$l") -> $(readlink -f "$l")"; done
-VID=$(ls /dev/video* 2>/dev/null | tr '\n' ' ')
-[ -n "$VID" ] && info "Video devices: $VID" || info "No /dev/video* cameras"
+# /dev/video10-31 are the Pi's own codec/ISP blocks (bcm2835-codec, -isp), not cameras.
+VID=""
+for v in /sys/class/video4linux/video*; do
+  [ -e "$v/name" ] || continue
+  NAME=$(cat "$v/name")
+  case "$NAME" in bcm2835-codec*|bcm2835-isp*|*unicam*-embedded) continue ;; esac
+  VID="$VID/dev/$(basename "$v") ($NAME) "
+done
+[ -n "$VID" ] && info "Cameras: $VID" || info "No cameras (/dev/video*) yet"
 for DEV in /dev/i2c-1 /dev/gpiochip0 /dev/serial0 /dev/ttyUSB0 /dev/ttyACM0 /dev/video0; do
   [ -e "$DEV" ] || continue
   G=$(stat -L -c %G "$DEV")
-  if [ "$G" = "root" ]; then info "$DEV belongs to root:root - only sudo can use it"
+  if [ "$DEV" = /dev/serial0 ] && [ "$G" = "tty" ]; then
+    info "/dev/serial0 is owned by the login prompt on it (group tty) - freed when the serial console is turned off (later lab)"
+  elif [ "$G" = "root" ]; then info "$DEV belongs to root:root - only sudo can use it"
   elif in_group "$G"; then pass "$REAL_USER can use $DEV (group $G)"
   else warn "$REAL_USER is not in group '$G' for $DEV - sudo usermod -aG $G $REAL_USER, then log in again"; fi
 done
 detail "lsusb" "lsusb; echo; lsusb -t"
-detail "Serial and video device nodes" "ls -l /dev/serial/by-id/ /dev/ttyUSB* /dev/ttyACM* /dev/video* 2>/dev/null"
+detail "Serial and video device nodes" "ls -l /dev/serial/by-id/ /dev/ttyUSB* /dev/ttyACM* /dev/video* 2>/dev/null; for v in /sys/class/video4linux/video*; do echo \"\$(basename \$v): \$(cat \$v/name)\"; done 2>/dev/null"
 detail "Groups" "id $REAL_USER"
 [ "$IS_ROOT" -eq 1 ] && detail "Kernel messages: USB, serial, I2C, voltage" "dmesg | grep -iE 'usb|tty|i2c|voltage|throttl' | tail -60"
 
