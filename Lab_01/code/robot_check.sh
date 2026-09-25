@@ -14,7 +14,7 @@
 #   ~/robot_report_<hostname>_<date>.txt
 #
 # Copy the three reports back to your laptop to compare the robots:
-#   scp ubuntu@robot01.local:'robot_report_*' .
+#   scp ubuntu@192.168.0.11:'robot_report_*' .
 #
 # USAGE
 #   sudo bash robot_check.sh     # recommended: sudo lets it read the power
@@ -172,10 +172,16 @@ section "Network"
 for IF in eth0 wlan0; do
   ADDR=$(ip -4 -br addr show "$IF" 2>/dev/null | awk '{print $3}')
   MAC=$(cat /sys/class/net/$IF/address 2>/dev/null)
-  if [ -n "$ADDR" ]; then pass "$IF: $ADDR (MAC $MAC)"
+  if [ -n "$ADDR" ]; then
+    pass "$IF: $ADDR (MAC $MAC)"
+    if [ "$IF" = "wlan0" ]; then
+      ip -4 addr show wlan0 | grep -q dynamic \
+        && warn "wlan0 address comes from DHCP and can change - set a static one (Lab 01, Part 4.1)" \
+        || pass "wlan0 address is static"
+    fi
   elif [ -n "$MAC" ]; then
     [ "$IF" = "wlan0" ] && warn "wlan0 has no IPv4 address - the robots need Wi-Fi to talk to each other" \
-                        || info "eth0 has no IPv4 address (fine when the cable is out)"
+                        || info "eth0 has no IPv4 address (fine: the robots use Wi-Fi)"
   else warn "$IF not found"; fi
 done
 if have iw && ip link show wlan0 >/dev/null 2>&1; then
@@ -183,7 +189,7 @@ if have iw && ip link show wlan0 >/dev/null 2>&1; then
   SIG=$(iw dev wlan0 link 2>/dev/null | sed -n 's/^\s*signal: //p')
   [ -n "$SSID" ] && info "Wi-Fi: '$SSID', signal $SIG"
   PS=$(iw dev wlan0 get power_save 2>/dev/null | awk '{print $NF}')
-  [ "$PS" = "on" ] && warn "Wi-Fi power saving is ON - adds latency to ROS 2 traffic between robots (fixed in a later lab)"
+  [ "$PS" = "on" ] && warn "Wi-Fi power saving is ON - adds latency to ROS 2 traffic between robots (Lab 01, Part 4.4)"
   [ "$PS" = "off" ] && pass "Wi-Fi power saving is off"
   REG=$(iw reg get 2>/dev/null | awk '/^country/{print $2; exit}' | tr -d ':')
   [ -n "$REG" ] && { [ "$REG" = "00" ] && warn "Wi-Fi country not set (00) - some channels are blocked" || info "Wi-Fi country: $REG"; }
@@ -191,7 +197,7 @@ elif ip link show wlan0 >/dev/null 2>&1; then
   info "Install 'iw' for Wi-Fi details: sudo apt install iw"
 fi
 ip link show wlan0 2>/dev/null | grep -q MULTICAST && pass "wlan0 supports multicast (ROS 2 discovery uses it)"
-ping -c2 -W3 8.8.8.8 >/dev/null 2>&1 && pass "Internet reachable (ping 8.8.8.8)" || fail "No internet - see Lab 01, Part 3.1"
+ping -c2 -W3 8.8.8.8 >/dev/null 2>&1 && pass "Internet reachable (ping 8.8.8.8)" || fail "No internet - check the Wi-Fi and the gateway (Lab 01, Part 4.1)"
 getent hosts packages.ros.org >/dev/null 2>&1 && pass "DNS works (packages.ros.org resolves)" || fail "DNS lookup failed"
 systemctl is-active --quiet avahi-daemon && pass "avahi-daemon running - $HOST.local works" || warn "avahi-daemon not running - $HOST.local will not resolve"
 systemctl is-active --quiet ssh && pass "SSH server running" || fail "SSH server not running"
@@ -344,7 +350,8 @@ fi
 } > "$REPORT"
 [ "$IS_ROOT" -eq 1 ] && chown "$REAL_USER": "$REPORT"
 echo "  Report saved: $REPORT"
-echo "  Copy it to your laptop:  scp $REAL_USER@$HOST.local:$(basename "$REPORT") ."
+MY_IP=$(ip -4 -br addr show wlan0 2>/dev/null | awk '{print $3}' | cut -d/ -f1)
+echo "  Copy it to your laptop:  scp $REAL_USER@${MY_IP:-$HOST.local}:$(basename "$REPORT") ."
 echo "-----------------------------------------------------------------------"
 echo
 [ "$FAILS" -eq 0 ]

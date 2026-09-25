@@ -19,7 +19,7 @@ title: Home
 
 | Lab | Topic |
 |-----|-------|
-| [Lab 01 — Raspberry Pi 4 Setup & SSH](Lab_01/) | Flash Ubuntu Server 22.04, connect over SSH, set up Ethernet and fleet Wi-Fi, update, add swap, prepare for ROS 2, and run `robot_check.sh` |
+| [Lab 01 — Raspberry Pi 4 Setup & SSH](Lab_01/) | Flash Ubuntu Server 22.04, join the Wi-Fi router, connect over SSH, give each robot a static Wi-Fi IP, update, add swap, prepare for ROS 2, and run `robot_check.sh` |
 | [Lab 02 — ROS 2 Humble (ros-base)](Lab_02/) | Install `ros-humble-ros-base` and the build tools, set the fleet's `ROS_DOMAIN_ID`, talk between the three robots, one namespace per robot, a first workspace |
 
 <!--
@@ -32,13 +32,14 @@ Planned, once the robot_check.sh reports are in:
 
 ## The fleet
 
-| Robot | Hostname | ROS namespace | eth0 (bench cable) |
+| Robot | Hostname | ROS namespace | wlan0 static IP |
 |---|---|---|---|
-| 1 | `robot01` | `/robot01` | `<laptop-range>.11` |
-| 2 | `robot02` | `/robot02` | `<laptop-range>.12` |
-| 3 | `robot03` | `/robot03` | `<laptop-range>.13` |
+| 1 | `robot01` | `/robot01` | `192.168.0.11` |
+| 2 | `robot02` | `/robot02` | `192.168.0.12` |
+| 3 | `robot03` | `/robot03` | `192.168.0.13` |
 
-All three robots and the laptop share one Wi-Fi network and one `ROS_DOMAIN_ID`.
+All three robots and the laptop join the same Wi-Fi router (gateway `192.168.0.1`, with
+internet access) and share one `ROS_DOMAIN_ID`.
 
 ## The expansion board
 
