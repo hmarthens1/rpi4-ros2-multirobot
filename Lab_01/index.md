@@ -264,7 +264,7 @@ whether your laptop **hands out** addresses on the cable (DHCP):
 | Pi joined Wi-Fi (set in Imager) | Yes, from the router | router's "connected devices" page, looking for `robot01` |
 
 **How to recognise the Pi:** its hardware (MAC) address starts with a Raspberry Pi prefix:
-`dc:a6:32`, `e4:5f:01`, `d8:3a:dd`, `28:cd:c1`, `2c:cf:67` or `b8:27:eb`.
+`dc:a6:32`, `e4:5f:01`, `d8:3a:dd`, `88:a2:9e`, `28:cd:c1`, `2c:cf:67` or `b8:27:eb`.
 Windows shows these with dashes, e.g. `dc-a6-32-…`.
 
 #### 3.2.1 IPv4: when the laptop hands out addresses
