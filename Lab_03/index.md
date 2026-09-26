@@ -84,8 +84,9 @@ cd ~/rpi4-robot-board
 sudo bash scripts/install_status_service.sh
 ```
 
-This builds the `robot_status` package in `~/ros2_ws` and starts two services at every boot,
-in the namespace `/<hostname>`:
+This installs the C++ build dependencies (`libgpiod-dev`, `nlohmann-json3-dev`, ...), builds the
+**C++** `robot_status` package in `~/ros2_ws` (about 2.5 minutes on a Pi 4), runs its tests, and
+starts two services at every boot, in the namespace `/<hostname>`:
 
 | Service | Node | Topics |
 |---|---|---|
