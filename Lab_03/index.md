@@ -96,7 +96,9 @@ starts two services at every boot, in the namespace `/<hostname>`:
 `command_node` carries out JSON commands (`drive`, `motor`, `servo`, `led`, `rgb`, `buzzer`,
 `stop`, `status`) and enforces its own limits whatever the sender asks: speed capped at 50 %,
 each motion at most 5 s and then it stops by itself, `stop` always wins, and the limits can't
-be changed with `ros2 param set` while it runs.
+be changed with `ros2 param set` while it runs. With the ultrasonic module plugged in (it can be
+plugged in or out at any time; the nodes check every 5 s), a forward move is refused when an
+obstacle is closer than 0.3 m and stopped if one comes that close.
 
 From the laptop (with `ROS_DOMAIN_ID=17` and Fast DDS):
 
