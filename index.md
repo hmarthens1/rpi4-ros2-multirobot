@@ -22,6 +22,7 @@ title: Home
 | [Lab 01 — Raspberry Pi 4 Setup & SSH](Lab_01/) | Flash Ubuntu Server 22.04, join the Wi-Fi router, connect over SSH, give each robot a static Wi-Fi IP, update, add swap, prepare for ROS 2, and run `robot_check.sh` |
 | [Lab 02 — ROS 2 Humble (ros-base)](Lab_02/) | Install `ros-humble-ros-base` and the build tools, set the fleet's `ROS_DOMAIN_ID`, talk between the three robots, one namespace per robot, a first workspace |
 | [Lab 03 — Expansion Board Driver](Lab_03/) | Install the fleet's driver ([rpi4-robot-board](https://github.com/hmarthens1/rpi4-robot-board)), check battery, LEDs, buzzer, sonar and motors, and start each robot's ROS 2 status and command nodes |
+| [Lab 04 — Camera Vision](Lab_04/) | OpenCV and ncnn on the robot, the `robot_vision` camera node: colour lane tracking and following, YOLOX object detection |
 
 <!--
 Planned:

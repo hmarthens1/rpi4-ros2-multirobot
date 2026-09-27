@@ -19,6 +19,7 @@ Lab_02/index.md          ROS 2 Humble ros-base, fleet domain ID, cross-robot tes
 Lab_02/code/
   install_ros2.sh          the Lab 02 install steps in one script              (runs on the Pi)
 Lab_03/index.md          the expansion board driver and the robots' ROS 2 nodes
+Lab_04/index.md          camera vision: OpenCV, lane tracking, YOLOX (ncnn)
                          (code: github.com/hmarthens1/rpi4-robot-board)
 ```
 
