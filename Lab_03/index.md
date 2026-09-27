@@ -59,7 +59,7 @@ the `robot-board` command is on the `PATH`. Update later with
 ## Part 2 — Check the board (nothing moves)
 
 ```bash
-robot-board battery          # e.g. 12.22 V - no sudo needed
+robot-board battery          # e.g. 8.17 V - no sudo needed
 sudo robot-board test        # battery, RGB LEDs, buzzer, LED1/LED2
 robot-board keys             # press Key1/Key2 on the board, Ctrl+C to stop
 robot-board sonar            # only with the ultrasonic module, Ctrl+C to stop
